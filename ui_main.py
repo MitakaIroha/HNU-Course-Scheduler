@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from logic import SchedulerLogic, WorkbookLoadError
-from models import Course
+from models import Course, MAX_WEEK, MIN_WEEK
 from data_services import (
     DataFormatError,
     PersonalSchedule,
@@ -112,7 +112,7 @@ class SelectableTextDelegate(QStyledItemDelegate):
 class MainApp(QMainWindow):
     def __init__(self, logic: SchedulerLogic) -> None:
         super().__init__()
-        self.logic, self.current_week = logic, 1
+        self.logic, self.current_week = logic, MIN_WEEK
         self.selected_day: int | None = None
         self.selected_period: int | None = None
         self.visible_columns: dict[str, bool] = {}
@@ -456,7 +456,7 @@ class MainApp(QMainWindow):
             self.quick_filters = {name: str(payload.get("quick_filters", {}).get(name, "")) for name in self.quick_combos}
             personal = payload.get("personal_schedule")
             self.personal_schedule = personal_schedule_from_dict(personal, "选课方案") if personal else None
-            self.current_week = max(1, min(18, int(payload.get("week", 1))))
+            self.current_week = max(MIN_WEEK, min(MAX_WEEK, int(payload.get("week", MIN_WEEK))))
             self.week_label.setText(f"第 {self.current_week:02d} 周")
             self._populate_quick_filters()
             for name, value in self.quick_filters.items():
@@ -709,7 +709,8 @@ class MainApp(QMainWindow):
         self.set_status(f"已退掉预选课程“{name}”，现在可以选择其他教师或时间")
 
     def change_week(self, delta: int) -> None:
-        self.current_week = (self.current_week - 1 + delta) % 18 + 1
+        week_count = MAX_WEEK - MIN_WEEK + 1
+        self.current_week = (self.current_week - MIN_WEEK + delta) % week_count + MIN_WEEK
         self.week_label.setText(f"第 {self.current_week:02d} 周")
         self.render_schedule()
 

@@ -1,6 +1,6 @@
 import unittest
 
-from models import Course, TimeSlot
+from models import Course, DEFAULT_WEEKS, MAX_WEEK, MIN_WEEK, TimeSlot
 from logic import SchedulerLogic
 from parser_utils import parse_hnu_time, parse_weeks
 
@@ -29,6 +29,31 @@ class ParserTests(unittest.TestCase):
 
     def test_accepts_lists_and_ranges_of_weeks(self):
         self.assertEqual(parse_weeks("(1-2,4,6-7)周"), frozenset({1, 2, 4, 6, 7}))
+
+    def test_week_boundaries_and_default_use_domain_constants(self):
+        self.assertEqual(DEFAULT_WEEKS, frozenset(range(MIN_WEEK, MAX_WEEK + 1)))
+        self.assertEqual(parse_weeks("第 1 周"), frozenset({MIN_WEEK}))
+        self.assertEqual(parse_weeks("第 18 周"), frozenset({MAX_WEEK}))
+        self.assertEqual(parse_weeks("1-18 周"), DEFAULT_WEEKS)
+
+    def test_week_parser_clips_ranges_and_rejects_out_of_range_values(self):
+        self.assertEqual(parse_weeks("(18)周"), frozenset({MAX_WEEK}))
+        self.assertEqual(parse_weeks("1-30周"), DEFAULT_WEEKS)
+        for value in (
+            "第 0 周", "第 19 周", "第 30 周", "(19)周", "(30)周", "(99)周",
+            "19-20周", "19-30周",
+        ):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                parse_weeks(value)
+        self.assertEqual(parse_hnu_time("A209 周一第0102节第(19)周"), ())
+
+    def test_time_slot_enforces_week_and_weekday_boundaries(self):
+        TimeSlot(1, frozenset({1}), frozenset({MAX_WEEK}), "")
+        TimeSlot(1, frozenset({1}), frozenset(), "")
+        with self.assertRaisesRegex(ValueError, "1 至 18"):
+            TimeSlot(1, frozenset({1}), frozenset({MAX_WEEK + 1}), "")
+        with self.assertRaisesRegex(ValueError, "1 至 7"):
+            TimeSlot(8, frozenset({1}), frozenset({1}), "")
 
     def test_rejects_course_periods_above_eleven(self):
         self.assertEqual(parse_hnu_time("1: A209 周一第1112节第(1-16)周"), ())

@@ -4,28 +4,47 @@ from __future__ import annotations
 
 import re
 
-from models import TimeSlot
+from models import DEFAULT_WEEKS, MAX_WEEK, MIN_WEEK, TimeSlot
 
-DEFAULT_WEEKS = frozenset(range(1, 19))
 DAY_MAP = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "日": 7, "天": 7}
 
 
 def parse_weeks(week_info: str) -> frozenset[int]:
     """Turn ``(1-2,4-16)周`` into explicit semester week numbers."""
-    match = re.search(r"\(([^)]*)\)", week_info or "")
-    if not match:
+    text = str(week_info or "").strip()
+    if not text:
         return DEFAULT_WEEKS
+    match = re.search(r"\(([^)]*)\)", text)
+    if match:
+        content = match.group(1)
+    else:
+        match = re.search(r"(?:第\s*)?([0-9][0-9,，、\s\-~至]*)\s*周", text)
+        if not match:
+            return DEFAULT_WEEKS
+        content = match.group(1)
+    content = re.sub(r"\s*([-~至])\s*", r"\1", content)
     weeks: set[int] = set()
-    for part in re.split(r"[,，、\s]+", match.group(1)):
+    found_number = False
+    for part in re.split(r"[,，、\s]+", content):
         if not part:
             continue
         range_match = re.fullmatch(r"(\d+)\s*[-~至]\s*(\d+)", part)
         if range_match:
+            found_number = True
             start, end = map(int, range_match.groups())
             if start <= end:
-                weeks.update(range(max(1, start), min(30, end) + 1))
-        elif part.isdigit() and int(part) > 0:
-            weeks.add(int(part))
+                bounded_start = max(MIN_WEEK, start)
+                bounded_end = min(MAX_WEEK, end)
+                if bounded_start <= bounded_end:
+                    weeks.update(range(bounded_start, bounded_end + 1))
+        elif part.isdigit():
+            found_number = True
+            week = int(part)
+            if not MIN_WEEK <= week <= MAX_WEEK:
+                raise ValueError(f"课程周次必须在 {MIN_WEEK} 至 {MAX_WEEK} 之间")
+            weeks.add(week)
+    if found_number and not weeks:
+        raise ValueError(f"课程周次必须在 {MIN_WEEK} 至 {MAX_WEEK} 之间")
     return frozenset(weeks) if weeks else DEFAULT_WEEKS
 
 
@@ -50,7 +69,11 @@ def parse_hnu_time(time_str: object) -> tuple[TimeSlot, ...]:
         periods = frozenset(parsed_periods)
         week_match = re.search(r"第?\s*(\([^)]*\)\s*周?)", line)
         raw_weeks = week_match.group(1).replace(" ", "") if week_match else ""
-        slots.append(TimeSlot(DAY_MAP[day_match.group(1)], periods, parse_weeks(raw_weeks), raw_weeks))
+        try:
+            weeks = parse_weeks(raw_weeks)
+        except ValueError:
+            continue
+        slots.append(TimeSlot(DAY_MAP[day_match.group(1)], periods, weeks, raw_weeks))
     return tuple(slots)
 
 

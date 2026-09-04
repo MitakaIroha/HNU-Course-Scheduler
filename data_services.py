@@ -15,8 +15,8 @@ from typing import Any, Iterable
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from models import Course, TimeSlot
-from parser_utils import DEFAULT_WEEKS, parse_weeks
+from models import Course, DEFAULT_WEEKS, MAX_WEEK, MIN_WEEK, TimeSlot
+from parser_utils import parse_weeks
 
 
 class DataFormatError(ValueError):
@@ -103,7 +103,12 @@ class PersonalSchedule:
 
 def _parse_plain_weeks(text: str) -> frozenset[int]:
     cleaned = text.replace("周", "").strip()
-    return parse_weeks(f"({cleaned})周") if cleaned else DEFAULT_WEEKS
+    if not cleaned:
+        return DEFAULT_WEEKS
+    try:
+        return parse_weeks(f"({cleaned})周")
+    except ValueError as exc:
+        raise DataFormatError(f"周次必须在 {MIN_WEEK} 至 {MAX_WEEK} 之间。") from exc
 
 
 def _periods_from_label(value: object) -> frozenset[int]:
@@ -332,7 +337,7 @@ def _parse_slot_dict(item: object, context: str) -> TimeSlot:
             raw_periods = item["periods"]
         else:
             raise KeyError("sections")
-        raw_weeks = item.get("weeks", list(range(1, 19)))
+        raw_weeks = item.get("weeks", sorted(DEFAULT_WEEKS))
         if not isinstance(raw_periods, list) or not isinstance(raw_weeks, list):
             raise TypeError
         periods = frozenset(_json_integer(value) for value in raw_periods)
@@ -343,8 +348,8 @@ def _parse_slot_dict(item: object, context: str) -> TimeSlot:
         raise DataFormatError(f"{context}的 weekday 必须在 1 至 7 之间。")
     if not periods or not all(1 <= value <= 11 for value in periods):
         raise DataFormatError(f"{context}的节次必须在 1 至 11 之间。")
-    if not weeks or not all(1 <= value <= 30 for value in weeks):
-        raise DataFormatError(f"{context}的周次必须在 1 至 30 之间。")
+    if not weeks or not all(MIN_WEEK <= value <= MAX_WEEK for value in weeks):
+        raise DataFormatError(f"{context}的周次必须在 {MIN_WEEK} 至 {MAX_WEEK} 之间。")
     try:
         return TimeSlot(weekday, periods, weeks, str(item.get("raw_weeks") or ""))
     except (TypeError, ValueError) as exc:

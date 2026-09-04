@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping
 
+MIN_WEEK = 1
+MAX_WEEK = 18
+DEFAULT_WEEKS = frozenset(range(MIN_WEEK, MAX_WEEK + 1))
+
 
 @dataclass(frozen=True, slots=True)
 class TimeSlot:
@@ -16,8 +20,18 @@ class TimeSlot:
     raw_weeks: str = ""
 
     def __post_init__(self) -> None:
-        if not self.periods or not all(1 <= period <= 11 for period in self.periods):
+        if isinstance(self.weekday, bool) or not isinstance(self.weekday, int) or not 1 <= self.weekday <= 7:
+            raise ValueError("星期必须在 1 至 7 之间")
+        if not self.periods or not all(
+            isinstance(period, int) and not isinstance(period, bool) and 1 <= period <= 11
+            for period in self.periods
+        ):
             raise ValueError("课程节次必须在 1 至 11 之间")
+        if not all(
+            isinstance(week, int) and not isinstance(week, bool) and MIN_WEEK <= week <= MAX_WEEK
+            for week in self.weeks
+        ):
+            raise ValueError(f"课程周次必须在 {MIN_WEEK} 至 {MAX_WEEK} 之间")
 
     def overlaps(self, other: "TimeSlot") -> bool:
         return self.weekday == other.weekday and bool(self.periods & other.periods) and bool(self.weeks & other.weeks)

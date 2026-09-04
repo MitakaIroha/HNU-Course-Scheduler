@@ -40,6 +40,26 @@ class PersonalScheduleTests(unittest.TestCase):
             with self.subTest(slot=slot), self.assertRaises(DataFormatError):
                 personal_schedule_from_dict({"slots": [slot]})
 
+    def test_json_weeks_enforce_semester_boundaries(self):
+        schedule = personal_schedule_from_dict({
+            "slots": [{"weekday": 1, "sections": [1], "weeks": [18]}],
+        })
+        self.assertEqual(schedule.slots[0].weeks, frozenset({18}))
+        for weeks in ([19], [30], [1, 2, 19]):
+            with self.subTest(weeks=weeks), self.assertRaises(DataFormatError):
+                personal_schedule_from_dict({
+                    "slots": [{"weekday": 1, "sections": [1], "weeks": weeks}],
+                })
+
+        with self.assertRaises(DataFormatError):
+            personal_schedule_from_dict({
+                "slots": [],
+                "courses": [{
+                    "name": "越界课程",
+                    "slots": [{"weekday": 1, "sections": [1], "weeks": [19]}],
+                }],
+            })
+
     def test_json_slots_must_be_lists(self):
         with self.assertRaises(DataFormatError):
             personal_schedule_from_dict({"slots": {"weekday": 1, "sections": [1]}})

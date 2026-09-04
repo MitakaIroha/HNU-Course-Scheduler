@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.course_scheduler_recovery.json
+.tmp/
+.vscode/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.log
+*.xls
+*.xlsx
+.DS_Store
+Thumbs.db

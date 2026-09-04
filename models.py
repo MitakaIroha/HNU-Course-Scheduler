@@ -27,7 +27,7 @@ class TimeSlot:
             for period in self.periods
         ):
             raise ValueError("课程节次必须在 1 至 11 之间")
-        if not all(
+        if not self.weeks or not all(
             isinstance(week, int) and not isinstance(week, bool) and MIN_WEEK <= week <= MAX_WEEK
             for week in self.weeks
         ):

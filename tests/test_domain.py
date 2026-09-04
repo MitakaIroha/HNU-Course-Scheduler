@@ -36,12 +36,11 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parse_weeks("第 18 周"), frozenset({MAX_WEEK}))
         self.assertEqual(parse_weeks("1-18 周"), DEFAULT_WEEKS)
 
-    def test_week_parser_clips_ranges_and_rejects_out_of_range_values(self):
+    def test_week_parser_rejects_out_of_range_values_and_ranges(self):
         self.assertEqual(parse_weeks("(18)周"), frozenset({MAX_WEEK}))
-        self.assertEqual(parse_weeks("1-30周"), DEFAULT_WEEKS)
         for value in (
             "第 0 周", "第 19 周", "第 30 周", "(19)周", "(30)周", "(99)周",
-            "19-20周", "19-30周",
+            "0-18周", "1-30周", "19-20周", "19-30周",
         ):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 parse_weeks(value)
@@ -49,7 +48,8 @@ class ParserTests(unittest.TestCase):
 
     def test_time_slot_enforces_week_and_weekday_boundaries(self):
         TimeSlot(1, frozenset({1}), frozenset({MAX_WEEK}), "")
-        TimeSlot(1, frozenset({1}), frozenset(), "")
+        with self.assertRaisesRegex(ValueError, "1 至 18"):
+            TimeSlot(1, frozenset({1}), frozenset(), "")
         with self.assertRaisesRegex(ValueError, "1 至 18"):
             TimeSlot(1, frozenset({1}), frozenset({MAX_WEEK + 1}), "")
         with self.assertRaisesRegex(ValueError, "1 至 7"):
@@ -78,8 +78,17 @@ class ConflictTests(unittest.TestCase):
 class CatalogueTests(unittest.TestCase):
     def test_courses_without_scheduled_time_remain_searchable(self):
         logic = SchedulerLogic()
-        unscheduled = course("英国小说", set(), "2", "TW006WY24M", "刘远")
-        unscheduled.slots = ()
+        unscheduled = Course(
+            uid="英国小说",
+            course_id="TW006WY24M",
+            name="英国小说",
+            teacher="刘远",
+            slots=(),
+            full_data={},
+            raw_time="",
+            color="#FFFFFF",
+            credits="2",
+        )
         logic.all_courses = [unscheduled]
 
         self.assertEqual([item.name for item in logic.filter_courses("英国小说")], ["英国小说"])

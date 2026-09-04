@@ -32,11 +32,9 @@ def parse_weeks(week_info: str) -> frozenset[int]:
         if range_match:
             found_number = True
             start, end = map(int, range_match.groups())
-            if start <= end:
-                bounded_start = max(MIN_WEEK, start)
-                bounded_end = min(MAX_WEEK, end)
-                if bounded_start <= bounded_end:
-                    weeks.update(range(bounded_start, bounded_end + 1))
+            if start > end or not MIN_WEEK <= start <= MAX_WEEK or not MIN_WEEK <= end <= MAX_WEEK:
+                raise ValueError(f"课程周次必须在 {MIN_WEEK} 至 {MAX_WEEK} 之间")
+            weeks.update(range(start, end + 1))
         elif part.isdigit():
             found_number = True
             week = int(part)

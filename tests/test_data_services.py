@@ -26,9 +26,58 @@ class PersonalScheduleTests(unittest.TestCase):
         self.assertTrue(schedule.conflicts(conflict))
         self.assertFalse(schedule.conflicts(alternate))
 
-    def test_rejects_invalid_json_slot(self):
+    def test_json_slot_validation_is_consistent(self):
+        invalid_slots = (
+            {"sections": [1], "weeks": [1]},
+            {"weekday": 1, "weeks": [1]},
+            {"weekday": "星期一", "sections": [1], "weeks": [1]},
+            {"weekday": 1, "sections": ["第一节"], "weeks": [1]},
+            {"weekday": 8, "sections": [1], "weeks": [1]},
+            {"weekday": 1, "sections": [12], "weeks": [1]},
+            {"weekday": 1, "sections": [1], "weeks": []},
+        )
+        for slot in invalid_slots:
+            with self.subTest(slot=slot), self.assertRaises(DataFormatError):
+                personal_schedule_from_dict({"slots": [slot]})
+
+    def test_json_slots_must_be_lists(self):
         with self.assertRaises(DataFormatError):
-            personal_schedule_from_dict({"slots": [{"weekday": 8, "sections": [], "weeks": []}]})
+            personal_schedule_from_dict({"slots": {"weekday": 1, "sections": [1]}})
+        with self.assertRaises(DataFormatError):
+            personal_schedule_from_dict({
+                "slots": [],
+                "courses": [{"name": "错误课程", "slots": {"weekday": 1, "sections": [1]}}],
+            })
+
+    def test_course_slots_use_the_same_json_validation(self):
+        invalid_course_slots = (
+            {"sections": [1], "weeks": [1]},
+            {"weekday": 1, "weeks": [1]},
+            {"weekday": "星期一", "sections": [1], "weeks": [1]},
+            {"weekday": 1, "sections": ["第一节"], "weeks": [1]},
+            {"weekday": 8, "sections": [1], "weeks": [1]},
+            {"weekday": 1, "sections": [12], "weeks": [1]},
+        )
+        for slot in invalid_course_slots:
+            with self.subTest(slot=slot), self.assertRaises(DataFormatError):
+                personal_schedule_from_dict({
+                    "slots": [],
+                    "courses": [{"name": "错误课程", "slots": [slot]}],
+                })
+
+    def test_valid_json_slots_support_sections_and_periods(self):
+        schedule = personal_schedule_from_dict({
+            "term": "2026-2027-1",
+            "slots": [{"weekday": "2", "sections": ["1", 2], "weeks": [1, "3"]}],
+            "courses": [{
+                "name": "正常课程",
+                "teacher": "测试教师",
+                "slots": [{"weekday": 3, "periods": [10, 11], "weeks": [1, 2]}],
+            }],
+        })
+        self.assertEqual(schedule.slots[0].periods, frozenset({1, 2}))
+        self.assertEqual(schedule.slots[0].weeks, frozenset({1, 3}))
+        self.assertEqual(schedule.courses[0].slots[0].periods, frozenset({10, 11}))
 
     def test_schedule_serialization_uses_public_schema(self):
         schedule = PersonalSchedule("2026-2027-1", (TimeSlot(1, frozenset({1, 2}), frozenset({1}), ""),))

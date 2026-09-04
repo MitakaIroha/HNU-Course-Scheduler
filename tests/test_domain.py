@@ -30,6 +30,11 @@ class ParserTests(unittest.TestCase):
     def test_accepts_lists_and_ranges_of_weeks(self):
         self.assertEqual(parse_weeks("(1-2,4,6-7)周"), frozenset({1, 2, 4, 6, 7}))
 
+    def test_rejects_course_periods_above_eleven(self):
+        self.assertEqual(parse_hnu_time("1: A209 周一第1112节第(1-16)周"), ())
+        with self.assertRaisesRegex(ValueError, "1 至 11"):
+            TimeSlot(1, frozenset({12}), frozenset({1}), "")
+
 
 class ConflictTests(unittest.TestCase):
     def test_courses_only_conflict_when_weeks_overlap(self):

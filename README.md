@@ -21,8 +21,8 @@
 ## 安装运行
 
 ```powershell
-git clone <repository-url>
-cd <repository-directory>
+git clone https://github.com/MitakaIroha/HNU-Course-Scheduler.git
+cd HNU-Course-Scheduler
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe .\main.py
@@ -57,3 +57,7 @@ Linux 或 macOS 可使用对应平台的虚拟环境 Python 运行，但目前�
 
 - 学分由个人课表中的课程名称和教师信息匹配课程清单后计算；课程清单缺失或同名课程信息不足时可能无法准确匹配。
 - 应用当前面向湖南大学课程清单及个人课表格式。
+
+## License
+
+本项目采用 [MIT License](LICENSE)。

@@ -109,7 +109,7 @@ def _parse_plain_weeks(text: str) -> frozenset[int]:
 def _periods_from_label(value: object) -> frozenset[int]:
     text = str(value or "")
     match = re.search(
-        r"^\s*((?:0[1-9]|1[0-4])(?:[、,，\s]+(?:0[1-9]|1[0-4]))*)\s*(?:小节)?\s*$",
+        r"^\s*((?:0[1-9]|1[01])(?:[、,，\s]+(?:0[1-9]|1[01]))*)\s*(?:小节)?\s*$",
         text,
         re.MULTILINE,
     )
@@ -309,28 +309,75 @@ def load_personal_excel(path: str | Path) -> PersonalSchedule:
     return _parse_personal_schedule_rows(rows, source, detected_format)
 
 
-def personal_schedule_from_dict(payload: dict[str, Any], source: str = "JSON") -> PersonalSchedule:
+def _json_integer(value: object) -> int:
+    if isinstance(value, bool):
+        raise ValueError
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str) and re.fullmatch(r"[+-]?\d+", value.strip()):
+        return int(value)
+    raise ValueError
+
+
+def _parse_slot_dict(item: object, context: str) -> TimeSlot:
+    if not isinstance(item, dict):
+        raise DataFormatError(f"{context}格式无效，时间段必须是 JSON 对象。")
+    try:
+        weekday = _json_integer(item["weekday"])
+        if "sections" in item:
+            raw_periods = item["sections"]
+        elif "periods" in item:
+            raw_periods = item["periods"]
+        else:
+            raise KeyError("sections")
+        raw_weeks = item.get("weeks", list(range(1, 19)))
+        if not isinstance(raw_periods, list) or not isinstance(raw_weeks, list):
+            raise TypeError
+        periods = frozenset(_json_integer(value) for value in raw_periods)
+        weeks = frozenset(_json_integer(value) for value in raw_weeks)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise DataFormatError(f"{context}格式无效。") from exc
+    if not 1 <= weekday <= 7:
+        raise DataFormatError(f"{context}的 weekday 必须在 1 至 7 之间。")
+    if not periods or not all(1 <= value <= 11 for value in periods):
+        raise DataFormatError(f"{context}的节次必须在 1 至 11 之间。")
+    if not weeks or not all(1 <= value <= 30 for value in weeks):
+        raise DataFormatError(f"{context}的周次必须在 1 至 30 之间。")
+    try:
+        return TimeSlot(weekday, periods, weeks, str(item.get("raw_weeks") or ""))
+    except (TypeError, ValueError) as exc:
+        raise DataFormatError(f"{context}格式无效。") from exc
+
+
+def personal_schedule_from_dict(payload: object, source: str = "JSON") -> PersonalSchedule:
     if not isinstance(payload, dict) or not isinstance(payload.get("slots"), list):
         raise DataFormatError("JSON 必须包含 slots 数组。")
-    slots: list[TimeSlot] = []
-    for index, item in enumerate(payload["slots"], 1):
-        try:
-            weekday = int(item["weekday"])
-            sections = frozenset(int(value) for value in item.get("sections", item.get("periods", [])))
-            weeks = frozenset(int(value) for value in item.get("weeks", range(1, 19)))
-        except (KeyError, TypeError, ValueError) as exc:
-            raise DataFormatError(f"第 {index} 个时间段格式无效。") from exc
-        if not 1 <= weekday <= 7 or not sections or not all(1 <= value <= 14 for value in sections) or not weeks:
-            raise DataFormatError(f"第 {index} 个时间段超出有效范围。")
-        slots.append(TimeSlot(weekday, sections, weeks, ""))
+    raw_courses = payload.get("courses", [])
+    if not isinstance(raw_courses, list):
+        raise DataFormatError("JSON 中的 courses 必须是数组。")
+    diagnostics = payload.get("diagnostics", {})
+    if not isinstance(diagnostics, dict):
+        raise DataFormatError("JSON 中的 diagnostics 必须是对象。")
+    slots = [
+        _parse_slot_dict(item, f"第 {index} 个时间段")
+        for index, item in enumerate(payload["slots"], 1)
+    ]
     courses: list[PersonalCourse] = []
-    for item in payload.get("courses", []):
-        course_slots = []
-        for raw_slot in item.get("slots", []):
-            course_slots.append(TimeSlot(int(raw_slot["weekday"]), frozenset(int(value) for value in raw_slot.get("sections", [])), frozenset(int(value) for value in raw_slot.get("weeks", range(1, 19))), ""))
+    for course_index, item in enumerate(raw_courses, 1):
+        if not isinstance(item, dict):
+            raise DataFormatError(f"第 {course_index} 门课程格式无效，课程必须是 JSON 对象。")
+        raw_course_slots = item.get("slots", [])
+        if not isinstance(raw_course_slots, list):
+            raise DataFormatError(f"第 {course_index} 门课程的 slots 必须是数组。")
+        course_slots = [
+            _parse_slot_dict(raw_slot, f"第 {course_index} 门课程的第 {slot_index} 个时间段")
+            for slot_index, raw_slot in enumerate(raw_course_slots, 1)
+        ]
         name = str(item.get("name", "已有课程"))
         courses.append(PersonalCourse(name, str(item.get("teacher", "未知")), str(item.get("classroom", "未知")), str(item.get("details", "")), tuple(course_slots), str(item.get("color") or personal_course_color(name))))
-    return PersonalSchedule(str(payload.get("term", "")), tuple(slots), source, dict(payload.get("diagnostics", {})), tuple(courses))
+    return PersonalSchedule(str(payload.get("term", "")), tuple(slots), source, dict(diagnostics), tuple(courses))
 
 
 def load_personal_json(path: str | Path) -> PersonalSchedule:

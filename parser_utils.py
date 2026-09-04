@@ -44,9 +44,10 @@ def parse_hnu_time(time_str: object) -> tuple[TimeSlot, ...]:
             parsed_periods = (int(value) for value in re.findall(r"\d+", period_text))
         else:
             parsed_periods = (int(period_text[index:index + 2]) for index in range(0, len(period_text), 2))
-        periods = frozenset(period for period in parsed_periods if 1 <= period <= 14)
-        if not periods:
+        parsed_periods = tuple(parsed_periods)
+        if not parsed_periods or not all(1 <= period <= 11 for period in parsed_periods):
             continue
+        periods = frozenset(parsed_periods)
         week_match = re.search(r"第?\s*(\([^)]*\)\s*周?)", line)
         raw_weeks = week_match.group(1).replace(" ", "") if week_match else ""
         slots.append(TimeSlot(DAY_MAP[day_match.group(1)], periods, parse_weeks(raw_weeks), raw_weeks))

@@ -15,6 +15,10 @@ class TimeSlot:
     weeks: frozenset[int]
     raw_weeks: str = ""
 
+    def __post_init__(self) -> None:
+        if not self.periods or not all(1 <= period <= 11 for period in self.periods):
+            raise ValueError("课程节次必须在 1 至 11 之间")
+
     def overlaps(self, other: "TimeSlot") -> bool:
         return self.weekday == other.weekday and bool(self.periods & other.periods) and bool(self.weeks & other.weeks)
 
